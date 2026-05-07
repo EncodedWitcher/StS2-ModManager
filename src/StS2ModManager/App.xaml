@@ -1,0 +1,10 @@
+<Application x:Class="StS2ModManager.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFF8F0E5" />
+        <SolidColorBrush x:Key="InkBrush" Color="#FF201913" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#FF6F6258" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFC96A32" />
+    </Application.Resources>
+</Application>

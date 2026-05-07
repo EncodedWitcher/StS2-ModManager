@@ -1,0 +1,99 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+      - "[0-9]*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to create or update, for example v0.1.0"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  APP_PROJECT: "src/StS2ModManager/StS2ModManager.csproj"
+  PUBLISH_DIR: "${{ github.workspace }}/artifacts/publish"
+  ZIP_PATH: "${{ github.workspace }}/artifacts/StS2ModManager-win-x64.zip"
+
+jobs:
+  build:
+    name: Build win-x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore StS2ModManager.sln
+
+      - name: Build
+        run: dotnet build StS2ModManager.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test StS2ModManager.sln --configuration Release --no-build --verbosity normal
+
+      - name: Publish
+        run: >
+          dotnet publish $env:APP_PROJECT
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --no-build
+          --output $env:PUBLISH_DIR
+          -p:DebugType=None
+          -p:DebugSymbols=false
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:ZIP_PATH) | Out-Null
+          Compress-Archive -Path "$env:PUBLISH_DIR/StS2ModManager.exe", "$env:PUBLISH_DIR/使用说明.txt", "$env:PUBLISH_DIR/config" -DestinationPath $env:ZIP_PATH -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StS2ModManager-win-x64
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error
+
+      - name: Resolve release tag
+        id: release_tag
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "tag=${{ inputs.tag_name }}" >> $env:GITHUB_OUTPUT
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            "tag=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+          } else {
+            "tag=" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Publish GitHub Release
+        if: steps.release_tag.outputs.tag != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          if (gh release view $env:RELEASE_TAG 2>$null) {
+            gh release upload $env:RELEASE_TAG $env:ZIP_PATH --clobber
+          } else {
+            gh release create $env:RELEASE_TAG $env:ZIP_PATH --title $env:RELEASE_TAG --generate-notes
+          }

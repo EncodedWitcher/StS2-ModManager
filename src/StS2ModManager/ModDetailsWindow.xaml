@@ -1,0 +1,77 @@
+<Window x:Class="StS2ModManager.ModDetailsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MOD 详情"
+        Width="520"
+        Height="520"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="#FFF8F0E5"
+        FontFamily="Bahnschrift">
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="MOD 详情"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   Foreground="#FF201913" />
+
+        <Grid Grid.Row="1" Margin="0,18,0,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="name" Foreground="#FF6F6258" Margin="0,0,12,10" />
+            <TextBlock x:Name="NameText" Grid.Row="0" Grid.Column="1" Foreground="#FF201913" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="author" Foreground="#FF6F6258" Margin="0,0,12,10" />
+            <TextBlock x:Name="AuthorText" Grid.Row="1" Grid.Column="1" Foreground="#FF201913" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="version" Foreground="#FF6F6258" Margin="0,0,12,10" />
+            <TextBlock x:Name="VersionText" Grid.Row="2" Grid.Column="1" Foreground="#FF201913" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="description" Foreground="#FF6F6258" Margin="0,0,12,18" />
+            <TextBlock x:Name="DescriptionText" Grid.Row="3" Grid.Column="1" Foreground="#FF201913" TextWrapping="Wrap" Margin="0,0,0,18" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="文件夹名" Foreground="#FF6F6258" Margin="0,0,12,10" />
+            <TextBox x:Name="FolderNameBox" Grid.Row="4" Grid.Column="1" MinHeight="34" Margin="0,0,0,10" />
+
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="备注" Foreground="#FF6F6258" Margin="0,0,12,0" />
+            <TextBox x:Name="NoteBox"
+                     Grid.Row="5"
+                     Grid.Column="1"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" />
+        </Grid>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Content="取消"
+                    MinWidth="88"
+                    MinHeight="38"
+                    Margin="0,0,12,0"
+                    Click="Cancel_Click" />
+            <Button Content="保存"
+                    MinWidth="88"
+                    MinHeight="38"
+                    Background="#FFC96A32"
+                    Foreground="#FFFFFFFF"
+                    Click="Save_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
