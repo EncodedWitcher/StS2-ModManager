@@ -34,9 +34,7 @@ public sealed class ModScanner
             entries.Add(CreateEntry(disabledDirectory, false, false));
         }
 
-        return entries
-            .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return entries.ToArray();
     }
 
     private ModEntry CreateEntry(DirectoryInfo directory, bool isEnabled, bool hasConflict)

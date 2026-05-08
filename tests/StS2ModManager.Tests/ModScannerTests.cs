@@ -37,6 +37,22 @@ public sealed class ModScannerTests
     }
 
     [Fact]
+    public void Scan_OrdersEnabledModsBeforeDisabledMods()
+    {
+        using var temp = new TempDirectory();
+        var paths = ModPaths.FromGameRoot(temp.Path);
+        Directory.CreateDirectory(Path.Combine(paths.EnabledDirectory, "BravoMod"));
+        Directory.CreateDirectory(Path.Combine(paths.EnabledDirectory, "alphaMod"));
+        Directory.CreateDirectory(Path.Combine(paths.DisabledDirectory, "ZuluMod"));
+        Directory.CreateDirectory(Path.Combine(paths.DisabledDirectory, "charlieMod"));
+
+        var result = new ModScanner().Scan(paths);
+
+        Assert.Equal(["alphaMod", "BravoMod", "charlieMod", "ZuluMod"], result.Select(mod => mod.Name));
+        Assert.Equal([true, true, false, false], result.Select(mod => mod.IsEnabled));
+    }
+
+    [Fact]
     public void Scan_ReadsMetadataJsonFromModDirectory()
     {
         using var temp = new TempDirectory();

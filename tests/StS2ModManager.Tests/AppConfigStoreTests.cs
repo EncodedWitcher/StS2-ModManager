@@ -34,6 +34,23 @@ public sealed class AppConfigStoreTests
     }
 
     [Fact]
+    public void SaveAndLoad_RoundTripsManualLaunchInfo()
+    {
+        using var temp = new TempDirectory();
+        var gameExe = Path.Combine(temp.Path, "game.exe");
+        File.WriteAllText(gameExe, string.Empty);
+
+        var store = new AppConfigStore(Path.Combine(temp.Path, "config", "config.json"));
+        store.Save(AppConfig.FromLaunchInfo(new GameLaunchInfo(gameExe, [], temp.Path)));
+
+        var loaded = store.Load();
+
+        Assert.Equal(gameExe, loaded.LastExecutablePath);
+        Assert.Equal([], loaded.LastArguments);
+        Assert.Equal(temp.Path, loaded.LastWorkingDirectory);
+    }
+
+    [Fact]
     public void SaveAndLoad_RoundTripsWindowNotesAndProfiles()
     {
         using var temp = new TempDirectory();

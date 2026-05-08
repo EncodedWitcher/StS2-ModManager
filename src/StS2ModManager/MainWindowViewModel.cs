@@ -46,7 +46,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    public string ModCountText => $"{Mods.Count} MODS";
+    public string ModCountText => $"{EnabledModCount}/{Mods.Count} MODS";
+
+    public int EnabledModCount => Mods.Count(mod => mod.IsEnabled);
 
     public bool HasSelectedProfile => !string.IsNullOrWhiteSpace(SelectedProfileName);
 
@@ -75,10 +77,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         Mods.Clear();
         foreach (var mod in mods)
         {
-            Mods.Add(new ModItemViewModel(mod, config.GetModNote(mod.Name)));
+            var item = new ModItemViewModel(mod, config.GetModNote(mod.Name));
+            item.PropertyChanged += ModItem_PropertyChanged;
+            Mods.Add(item);
         }
 
         OnPropertyChanged(nameof(ModCountText));
+        OnPropertyChanged(nameof(EnabledModCount));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusVisibility));
     }
@@ -104,6 +109,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Mods
             .Select(mod => new ModSelection(mod.FolderName, mod.IsEnabled))
             .ToArray();
+    }
+
+    private void ModItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(ModItemViewModel.IsEnabled), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(EnabledModCount));
+        OnPropertyChanged(nameof(ModCountText));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

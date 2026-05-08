@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Media;
 using StS2ModManager.Core;
 
 namespace StS2ModManager;
@@ -44,6 +45,7 @@ public sealed class ModItemViewModel : INotifyPropertyChanged
             _isEnabled = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(StateText));
+            OnPropertyChanged(nameof(StateBrush));
         }
     }
 
@@ -67,6 +69,10 @@ public sealed class ModItemViewModel : INotifyPropertyChanged
             return IsEnabled ? "启用" : "禁用";
         }
     }
+
+    public Brush StateBrush => HasConflict
+        ? Brushes.OrangeRed
+        : IsEnabled ? Brushes.SeaGreen : Brushes.IndianRed;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {

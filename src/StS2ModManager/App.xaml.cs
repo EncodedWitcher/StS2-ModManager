@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using StS2ModManager.Core;
 
@@ -9,6 +8,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         try
         {
@@ -28,31 +28,22 @@ public partial class App : Application
 
             var config = configStore.Load();
             var parsedLaunchInfo = CommandLineParser.Parse(e.Args);
-            var launchInfo = parsedLaunchInfo ?? config.ToLaunchInfoIfValid();
+            var launchInfo = new GameLaunchInfoResolver().Resolve(parsedLaunchInfo, config);
 
             if (launchInfo is null)
             {
-                MessageBox.Show(
-                    "未从 Steam 启动参数中找到游戏 exe，且没有可用的上次启动记录。\n\n请通过 Steam 启动项运行管理器一次。",
-                    "StS2 Mod Manager",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-                Shutdown(1);
-                return;
-            }
+                var startupWindow = new StartupConfigWindow(new GameInstallLocator(), config.LastWorkingDirectory);
+                if (startupWindow.ShowDialog() != true || startupWindow.SelectedLaunchInfo is null)
+                {
+                    Shutdown();
+                    return;
+                }
 
-            if (!File.Exists(launchInfo.ExecutablePath))
-            {
-                MessageBox.Show(
-                    "游戏 exe 不存在。请通过 Steam 启动项重新运行管理器以刷新启动记录。",
-                    "StS2 Mod Manager",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-                Shutdown(1);
-                return;
+                launchInfo = startupWindow.SelectedLaunchInfo;
+                config.ApplyLaunchInfo(launchInfo);
+                configStore.Save(config);
             }
-
-            if (parsedLaunchInfo is not null)
+            else if (parsedLaunchInfo is not null)
             {
                 config.ApplyLaunchInfo(parsedLaunchInfo);
                 configStore.Save(config);
@@ -63,6 +54,7 @@ public partial class App : Application
             var viewModel = new MainWindowViewModel(launchInfo, paths, mods, config);
             var window = new MainWindow(viewModel, config, configStore);
             MainWindow = window;
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
             window.Show();
         }
         catch (Exception ex)

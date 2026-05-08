@@ -197,7 +197,7 @@
                                                VerticalAlignment="Center"
                                                HorizontalAlignment="Right"
                                                FontWeight="SemiBold"
-                                               Foreground="#FFC96A32" />
+                                               Foreground="{Binding StateBrush}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
