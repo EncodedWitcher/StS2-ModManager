@@ -8,10 +8,12 @@ namespace StS2ModManager;
 
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
+    private readonly AppConfig _config;
     private string? _selectedProfileName;
 
     public MainWindowViewModel(GameLaunchInfo launchInfo, ModPaths modPaths, IReadOnlyList<ModEntry> mods, AppConfig config)
     {
+        _config = config;
         LaunchInfo = launchInfo;
         ModPaths = modPaths;
         Mods = new ObservableCollection<ModItemViewModel>();
@@ -82,26 +84,38 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             Mods.Add(item);
         }
 
+        RefreshProfileSelection(config);
         OnPropertyChanged(nameof(ModCountText));
         OnPropertyChanged(nameof(EnabledModCount));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusVisibility));
     }
 
+    public void ReloadModsPreservingOrder(IReadOnlyList<ModEntry> mods, AppConfig config)
+    {
+        var previousIndexes = Mods
+            .Select((mod, index) => new { mod.FolderName, Index = index })
+            .ToDictionary(mod => mod.FolderName, mod => mod.Index, StringComparer.OrdinalIgnoreCase);
+
+        var orderedMods = mods
+            .Select((mod, scanIndex) => new { Mod = mod, ScanIndex = scanIndex })
+            .OrderBy(item => previousIndexes.TryGetValue(item.Mod.Name, out var index) ? index : int.MaxValue)
+            .ThenBy(item => item.ScanIndex)
+            .Select(item => item.Mod)
+            .ToArray();
+
+        ReloadMods(orderedMods, config);
+    }
+
     public void ReloadProfiles(AppConfig config)
     {
-        var previousSelection = SelectedProfileName;
         ProfileNames.Clear();
         foreach (var profileName in config.Profiles.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
             ProfileNames.Add(profileName);
         }
 
-        SelectedProfileName = previousSelection is not null && ProfileNames.Contains(previousSelection)
-            ? previousSelection
-            : ProfileNames.FirstOrDefault();
-
-        OnPropertyChanged(nameof(HasSelectedProfile));
+        RefreshProfileSelection(config);
     }
 
     public IReadOnlyList<ModSelection> GetSelections()
@@ -120,6 +134,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(EnabledModCount));
         OnPropertyChanged(nameof(ModCountText));
+        RefreshProfileSelection(_config);
+    }
+
+    private void RefreshProfileSelection(AppConfig config)
+    {
+        SelectedProfileName = config.FindMatchingProfileName(EnabledFolderNames, SelectedProfileName);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

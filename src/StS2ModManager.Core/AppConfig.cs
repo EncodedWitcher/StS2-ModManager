@@ -53,6 +53,34 @@ public sealed class AppConfig
         return TryGetValue(ModNotes, folderName, out var note) ? note : string.Empty;
     }
 
+    public string? FindMatchingProfileName(IEnumerable<string> enabledFolderNames, string? preferredProfileName = null)
+    {
+        ArgumentNullException.ThrowIfNull(enabledFolderNames);
+
+        var enabledNames = new HashSet<string>(
+            enabledFolderNames.Where(name => !string.IsNullOrWhiteSpace(name)),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(preferredProfileName))
+        {
+            var preferredKey = FindKey(Profiles, preferredProfileName);
+            if (preferredKey is not null && ProfileMatches(enabledNames, Profiles[preferredKey]))
+            {
+                return preferredKey;
+            }
+        }
+
+        foreach (var profileName in Profiles.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (ProfileMatches(enabledNames, Profiles[profileName]))
+            {
+                return profileName;
+            }
+        }
+
+        return null;
+    }
+
     public void SetModNote(string folderName, string note)
     {
         var key = FindKey(ModNotes, folderName) ?? folderName;
@@ -116,6 +144,15 @@ public sealed class AppConfig
 
         value = values[existingKey];
         return true;
+    }
+
+    private static bool ProfileMatches(HashSet<string> enabledNames, IEnumerable<string> profileNames)
+    {
+        var profileSet = new HashSet<string>(
+            profileNames.Where(name => !string.IsNullOrWhiteSpace(name)),
+            StringComparer.OrdinalIgnoreCase);
+
+        return enabledNames.SetEquals(profileSet);
     }
 
     private static string? FindKey<TValue>(Dictionary<string, TValue> values, string key)

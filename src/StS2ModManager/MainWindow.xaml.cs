@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Diagnostics;
+using System.IO;
 using StS2ModManager.Core;
 
 namespace StS2ModManager;
@@ -27,7 +29,7 @@ public partial class MainWindow : Window
 
     private async void SaveAndLaunch_Click(object sender, RoutedEventArgs e)
     {
-        if (!TrySyncMods())
+        if (!TrySyncMods(false))
         {
             return;
         }
@@ -60,7 +62,17 @@ public partial class MainWindow : Window
 
     private void ModToggle_Click(object sender, RoutedEventArgs e)
     {
-        TrySyncMods();
+        TrySyncMods(true);
+    }
+
+    private void OpenEnabledMods_Click(object sender, RoutedEventArgs e)
+    {
+        OpenDirectory(_viewModel.ModPaths.EnabledDirectory);
+    }
+
+    private void OpenDisabledMods_Click(object sender, RoutedEventArgs e)
+    {
+        OpenDirectory(_viewModel.ModPaths.DisabledDirectory);
     }
 
     private void ModDetails_Click(object sender, RoutedEventArgs e)
@@ -154,7 +166,7 @@ public partial class MainWindow : Window
         _viewModel.ReloadProfiles(_config);
     }
 
-    private bool TrySyncMods()
+    private bool TrySyncMods(bool preserveOrder)
     {
         if (_isSyncing)
         {
@@ -165,7 +177,15 @@ public partial class MainWindow : Window
         {
             _isSyncing = true;
             _synchronizer.Sync(_viewModel.ModPaths, _viewModel.GetSelections());
-            ReloadMods();
+            if (preserveOrder)
+            {
+                ReloadModsPreservingOrder();
+            }
+            else
+            {
+                ReloadMods();
+            }
+
             return true;
         }
         catch (Exception ex)
@@ -183,6 +203,28 @@ public partial class MainWindow : Window
     private void ReloadMods()
     {
         _viewModel.ReloadMods(_scanner.Scan(_viewModel.ModPaths), _config);
+    }
+
+    private void ReloadModsPreservingOrder()
+    {
+        _viewModel.ReloadModsPreservingOrder(_scanner.Scan(_viewModel.ModPaths), _config);
+    }
+
+    private void OpenDirectory(string directory)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = directory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "打开文件夹失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
