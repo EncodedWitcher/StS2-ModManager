@@ -229,13 +229,13 @@ public partial class MainWindow : Window
         {
             _isBusy = true;
             using var package = _resolver.Resolve(source);
-            var confirm = MessageBox.Show(
+            var confirmed = ConfirmDialog.Show(
                 this,
-                $"检测到 MOD：{package.SuggestedName}\n{DescribePackage(package)}\n\n将添加到 mods_disabled（默认未启用）。确认添加？",
                 "添加 mod",
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Question);
-            if (confirm != MessageBoxResult.OK)
+                $"检测到 MOD：{package.SuggestedName}\n{DescribePackage(package)}\n\n将添加到 mods_disabled（默认未启用）。确认添加？",
+                "添加",
+                "取消");
+            if (!confirmed)
             {
                 return;
             }
@@ -289,13 +289,13 @@ public partial class MainWindow : Window
         {
             _isBusy = true;
             using var package = _resolver.Resolve(source);
-            var confirm = MessageBox.Show(
+            var confirmed = ConfirmDialog.Show(
                 this,
-                $"将用所选内容替换 MOD：{target.FolderName}\n新内容检测为：{package.SuggestedName}\n{DescribePackage(package)}\n\n更新会保留原有的文件夹名与启用状态，确认更新？",
                 "更新 mod",
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Warning);
-            if (confirm != MessageBoxResult.OK)
+                $"将用所选内容替换 MOD：{target.FolderName}\n新内容检测为：{package.SuggestedName}\n{DescribePackage(package)}\n\n更新会保留原有的文件夹名与启用状态，确认更新？",
+                "更新",
+                "取消");
+            if (!confirmed)
             {
                 return;
             }
@@ -331,13 +331,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var result = MessageBox.Show(
+        var confirmed = ConfirmDialog.Show(
             this,
-            $"确认卸载（删除）MOD：{target.FolderName}？\n该操作会从磁盘删除整个 MOD 文件夹，无法恢复。",
             "卸载 mod",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes)
+            $"确认卸载（删除）MOD：{target.FolderName}？\n该操作会从磁盘删除整个 MOD 文件夹，无法恢复。",
+            "卸载",
+            "取消");
+        if (!confirmed)
         {
             return;
         }
@@ -400,13 +400,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var confirm = MessageBox.Show(
+        var confirmed = ConfirmDialog.Show(
             this,
-            "应用“空白”组合会把当前所有已启用的 MOD 移回未启用。确认清空？",
             "应用空白组合",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Warning);
-        if (confirm != MessageBoxResult.OK)
+            "应用“空白”组合会把当前所有已启用的 MOD 移回未启用。确认清空？",
+            "清空",
+            "取消");
+        if (!confirmed)
         {
             return;
         }
@@ -482,8 +482,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var result = MessageBox.Show(this, $"删除配置组合“{profileName}”？", "StS2 Mod Manager", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes)
+        var confirmed = ConfirmDialog.Show(this, "删除组合", $"删除配置组合“{profileName}”？", "删除", "取消");
+        if (!confirmed)
         {
             return;
         }
