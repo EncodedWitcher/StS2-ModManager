@@ -251,6 +251,8 @@
                     <Button x:Name="ApplyProfileButton"
                             Grid.Column="2"
                             Content="应用"
+                            ToolTip="应用“空白”组合：清空当前所有已启用 MOD（具名组合为无感即时切换，无需此按钮）"
+                            Visibility="{Binding ApplyButtonVisibility}"
                             Margin="12,0,0,0"
                             MinHeight="36"
                             Background="#FFE7D9C8"

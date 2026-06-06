@@ -9,6 +9,11 @@ namespace StS2ModManager;
 
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
+    /// <summary>
+    /// 配置组合下拉框里的“空白”占位项：代表“未匹配任何组合”，选中它可清空当前启用配置。
+    /// </summary>
+    public const string BlankProfileOption = "（空白）";
+
     private readonly AppConfig _config;
     private readonly CollectionViewSource _enabledSource;
     private readonly CollectionViewSource _disabledSource;
@@ -75,6 +80,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _selectedProfileName = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedProfile));
+            OnPropertyChanged(nameof(IsBlankProfileSelected));
+            OnPropertyChanged(nameof(ApplyButtonVisibility));
         }
     }
 
@@ -88,7 +95,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string DisabledHeaderText => $"未启用 · {DisabledModCount}";
 
-    public bool HasSelectedProfile => !string.IsNullOrWhiteSpace(SelectedProfileName);
+    /// <summary>当前选中的是“空白”占位项（或未选中），而非某个具名配置组合。</summary>
+    public bool IsBlankProfileSelected =>
+        string.IsNullOrWhiteSpace(SelectedProfileName)
+        || string.Equals(SelectedProfileName, BlankProfileOption, StringComparison.Ordinal);
+
+    /// <summary>只有具名配置组合被选中时才算“有选中组合”（用于启用“删除组合”等操作）。</summary>
+    public bool HasSelectedProfile => !IsBlankProfileSelected;
+
+    /// <summary>“应用”按钮只在空白/未保存状态下出现：具名组合是无感即时切换，无需确认。</summary>
+    public Visibility ApplyButtonVisibility => IsBlankProfileSelected
+        ? Visibility.Visible
+        : Visibility.Collapsed;
 
     public string StatusText
     {
@@ -125,6 +143,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public void ReloadProfiles(AppConfig config)
     {
         ProfileNames.Clear();
+        ProfileNames.Add(BlankProfileOption);
         foreach (var profileName in config.Profiles.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
             ProfileNames.Add(profileName);
@@ -167,7 +186,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void RefreshProfileSelection(AppConfig config)
     {
-        SelectedProfileName = config.FindMatchingProfileName(EnabledFolderNames, SelectedProfileName);
+        var preferred = IsBlankProfileSelected ? null : SelectedProfileName;
+        SelectedProfileName = config.FindMatchingProfileName(EnabledFolderNames, preferred) ?? BlankProfileOption;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

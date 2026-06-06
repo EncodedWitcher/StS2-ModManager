@@ -366,13 +366,57 @@ public partial class MainWindow : Window
 
     private void ProfileComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // 无感切换逻辑在后续提交中接入；当前通过“应用”按钮显式应用。
+        // 程序内部刷新选中项时 _isBusy 为真，跳过，避免回环。
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var profileName = ProfileComboBox.SelectedItem as string;
+
+        // 空白项不自动应用：清空操作交给“应用”按钮显式确认。
+        if (string.IsNullOrEmpty(profileName)
+            || string.Equals(profileName, MainWindowViewModel.BlankProfileOption, StringComparison.Ordinal)
+            || !_config.Profiles.TryGetValue(profileName, out var enabledFolderNames))
+        {
+            return;
+        }
+
+        // 当前启用状态已经与该组合一致（多为程序刷新或手动拨动导致的选中）：无需重复应用。
+        if (CurrentEnabledMatches(enabledFolderNames))
+        {
+            return;
+        }
+
+        // 选中具名组合即无感应用。
+        ApplyEnabledSet(enabledFolderNames, "应用配置组合失败");
     }
 
     private void ApplyProfile_Click(object sender, RoutedEventArgs e)
     {
-        var profileName = _viewModel.SelectedProfileName;
-        if (string.IsNullOrWhiteSpace(profileName) || !_config.Profiles.TryGetValue(profileName, out var enabledFolderNames))
+        // “应用”按钮只在空白/未保存状态下可见，作用是清空当前所有已启用 MOD。
+        if (!_viewModel.IsBlankProfileSelected || _viewModel.EnabledModCount == 0)
+        {
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            this,
+            "应用“空白”组合会把当前所有已启用的 MOD 移回未启用。确认清空？",
+            "应用空白组合",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        ApplyEnabledSet(Array.Empty<string>(), "清空已启用 MOD 失败");
+    }
+
+    private void ApplyEnabledSet(IReadOnlyList<string> enabledFolderNames, string errorTitle)
+    {
+        if (_isBusy)
         {
             return;
         }
@@ -388,7 +432,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ReloadMods();
-            MessageBox.Show(this, ex.Message, "应用配置组合失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, ex.Message, errorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -396,15 +440,31 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool CurrentEnabledMatches(IEnumerable<string> profileEnabledNames)
+    {
+        var current = new HashSet<string>(_viewModel.EnabledFolderNames, StringComparer.OrdinalIgnoreCase);
+        var target = new HashSet<string>(
+            profileEnabledNames.Where(name => !string.IsNullOrWhiteSpace(name)),
+            StringComparer.OrdinalIgnoreCase);
+        return current.SetEquals(target);
+    }
+
     private void SaveProfile_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ProfileNameDialog(_viewModel.SelectedProfileName)
+        var initialName = _viewModel.HasSelectedProfile ? _viewModel.SelectedProfileName : null;
+        var dialog = new ProfileNameDialog(initialName)
         {
             Owner = this
         };
 
         if (dialog.ShowDialog() != true)
         {
+            return;
+        }
+
+        if (string.Equals(dialog.ProfileNameValue, MainWindowViewModel.BlankProfileOption, StringComparison.Ordinal))
+        {
+            MessageBox.Show(this, $"“{MainWindowViewModel.BlankProfileOption}”是保留名称，请换一个组合名。", "保存配置组合", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
