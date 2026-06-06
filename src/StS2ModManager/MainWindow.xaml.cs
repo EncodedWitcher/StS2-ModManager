@@ -22,6 +22,8 @@ public partial class MainWindow : Window
     private readonly GameProcessLauncher _launcher = new();
     private bool _isBusy;
     private bool _syncingSelection;
+    private bool _suppressProfileSwitch;
+    private string? _activeProfileName;
 
     public MainWindow(MainWindowViewModel viewModel, AppConfig config, AppConfigStore configStore)
     {
@@ -366,44 +368,59 @@ public partial class MainWindow : Window
 
     private void ProfileComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // 程序内部刷新选中项时 _isBusy 为真，跳过，避免回环。
-        if (_isBusy)
+        // 程序内部静默改选时跳过，避免触发提醒/应用。
+        if (_isBusy || _suppressProfileSwitch)
         {
             return;
         }
 
-        var profileName = ProfileComboBox.SelectedItem as string;
-
-        // 空白项不自动应用：清空操作交给“应用”按钮显式确认。
-        if (string.IsNullOrEmpty(profileName)
-            || string.Equals(profileName, MainWindowViewModel.BlankProfileOption, StringComparison.Ordinal)
-            || !_config.Profiles.TryGetValue(profileName, out var enabledFolderNames))
+        var newName = ProfileComboBox.SelectedItem as string;
+        if (string.IsNullOrEmpty(newName) || !_config.Profiles.TryGetValue(newName, out var newSet))
         {
+            _activeProfileName = newName;
             return;
         }
 
-        // 当前启用状态已经与该组合一致（多为程序刷新或手动拨动导致的选中）：无需重复应用。
-        if (CurrentEnabledMatches(enabledFolderNames))
+        // req 7：从一个“有未保存改动”的组合切换出去时，提醒是否先保存到原组合。
+        if (!string.IsNullOrEmpty(_activeProfileName)
+            && !string.Equals(_activeProfileName, newName, StringComparison.OrdinalIgnoreCase)
+            && _config.Profiles.TryGetValue(_activeProfileName, out var oldSet)
+            && !CurrentEnabledMatches(oldSet))
         {
-            return;
+            var save = ConfirmDialog.Show(
+                this,
+                "未保存的改动",
+                $"组合「{_activeProfileName}」有未保存的改动。\n要先把当前已启用的 MOD 保存到该组合吗？",
+                "保存",
+                "不保存");
+            if (save)
+            {
+                _config.Profiles[_activeProfileName] = _viewModel.EnabledFolderNames.ToArray();
+                _configStore.Save(_config);
+            }
         }
 
-        // 选中具名组合即无感应用。
-        ApplyEnabledSet(enabledFolderNames, "应用配置组合失败");
+        // 选中具名组合即应用（当前状态已一致时跳过多余的同步与刷新）。
+        if (!CurrentEnabledMatches(newSet))
+        {
+            ApplyEnabledSet(newSet, "应用配置组合失败");
+        }
+
+        _activeProfileName = newName;
     }
 
-    private void ApplyProfile_Click(object sender, RoutedEventArgs e)
+    private void Clear_Click(object sender, RoutedEventArgs e)
     {
-        // “应用”按钮只在空白/未保存状态下可见，作用是清空当前所有已启用 MOD。
-        if (!_viewModel.IsBlankProfileSelected || _viewModel.EnabledModCount == 0)
+        // “清空”按钮常驻：把当前所有已启用的 MOD 移回未启用。
+        if (_isBusy || _viewModel.EnabledModCount == 0)
         {
             return;
         }
 
         var confirmed = ConfirmDialog.Show(
             this,
-            "应用空白组合",
-            "应用“空白”组合会把当前所有已启用的 MOD 移回未启用。确认清空？",
+            "清空",
+            "确定把当前所有已启用的 MOD 移回未启用吗？",
             "清空",
             "取消");
         if (!confirmed)
@@ -412,6 +429,8 @@ public partial class MainWindow : Window
         }
 
         ApplyEnabledSet(Array.Empty<string>(), "清空已启用 MOD 失败");
+        SetSelectedProfileSilently(null);
+        _activeProfileName = null;
     }
 
     private void ApplyEnabledSet(IReadOnlyList<string> enabledFolderNames, string errorTitle)
@@ -451,27 +470,23 @@ public partial class MainWindow : Window
 
     private void SaveProfile_Click(object sender, RoutedEventArgs e)
     {
-        var initialName = _viewModel.HasSelectedProfile ? _viewModel.SelectedProfileName : null;
-        var dialog = new ProfileNameDialog(initialName)
+        var dialog = new SaveProfileDialog(_viewModel.ProfileNames, _activeProfileName)
         {
             Owner = this
         };
 
+        // 叉 / 取消 视为否。
         if (dialog.ShowDialog() != true)
         {
             return;
         }
 
-        if (string.Equals(dialog.ProfileNameValue, MainWindowViewModel.BlankProfileOption, StringComparison.Ordinal))
-        {
-            MessageBox.Show(this, $"“{MainWindowViewModel.BlankProfileOption}”是保留名称，请换一个组合名。", "保存配置组合", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        _config.Profiles[dialog.ProfileNameValue] = _viewModel.EnabledFolderNames.ToArray();
+        var name = dialog.SelectedProfileName;
+        _config.Profiles[name] = _viewModel.EnabledFolderNames.ToArray();
         _configStore.Save(_config);
         _viewModel.ReloadProfiles(_config);
-        _viewModel.SelectedProfileName = dialog.ProfileNameValue;
+        SetSelectedProfileSilently(name);
+        _activeProfileName = name;
     }
 
     private void DeleteProfile_Click(object sender, RoutedEventArgs e)
@@ -490,7 +505,25 @@ public partial class MainWindow : Window
 
         _config.Profiles.Remove(profileName);
         _configStore.Save(_config);
+        if (string.Equals(_activeProfileName, profileName, StringComparison.OrdinalIgnoreCase))
+        {
+            _activeProfileName = null;
+        }
+
         _viewModel.ReloadProfiles(_config);
+    }
+
+    private void SetSelectedProfileSilently(string? name)
+    {
+        _suppressProfileSwitch = true;
+        try
+        {
+            _viewModel.SelectedProfileName = name;
+        }
+        finally
+        {
+            _suppressProfileSwitch = false;
+        }
     }
 
     // ===== 打开文件夹 =====

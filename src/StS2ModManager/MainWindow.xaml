@@ -247,16 +247,15 @@
                               Margin="12,0,0,0"
                               MinHeight="36"
                               VerticalContentAlignment="Center" />
-                    <Button x:Name="ApplyProfileButton"
+                    <Button x:Name="ClearButton"
                             Grid.Column="2"
-                            Content="应用"
-                            ToolTip="应用“空白”组合：清空当前所有已启用 MOD（具名组合为无感即时切换，无需此按钮）"
-                            Visibility="{Binding ApplyButtonVisibility}"
+                            Content="清空"
+                            ToolTip="把当前所有已启用的 MOD 移回未启用"
                             Margin="12,0,0,0"
                             MinHeight="36"
                             Background="#FFE7D9C8"
                             Foreground="#FF201913"
-                            Click="ApplyProfile_Click" />
+                            Click="Clear_Click" />
                 </Grid>
 
                 <TextBlock Grid.Row="1"

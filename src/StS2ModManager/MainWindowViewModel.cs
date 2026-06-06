@@ -9,11 +9,6 @@ namespace StS2ModManager;
 
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
-    /// <summary>
-    /// 配置组合下拉框里的“空白”占位项：代表“未匹配任何组合”，选中它可清空当前启用配置。
-    /// </summary>
-    public const string BlankProfileOption = "（空白）";
-
     private readonly AppConfig _config;
     private readonly CollectionViewSource _enabledSource;
     private readonly CollectionViewSource _disabledSource;
@@ -80,8 +75,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _selectedProfileName = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedProfile));
-            OnPropertyChanged(nameof(IsBlankProfileSelected));
-            OnPropertyChanged(nameof(ApplyButtonVisibility));
         }
     }
 
@@ -95,18 +88,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string DisabledHeaderText => $"未启用 · {DisabledModCount}";
 
-    /// <summary>当前选中的是“空白”占位项（或未选中），而非某个具名配置组合。</summary>
-    public bool IsBlankProfileSelected =>
-        string.IsNullOrWhiteSpace(SelectedProfileName)
-        || string.Equals(SelectedProfileName, BlankProfileOption, StringComparison.Ordinal);
-
-    /// <summary>只有具名配置组合被选中时才算“有选中组合”（用于启用“删除组合”等操作）。</summary>
-    public bool HasSelectedProfile => !IsBlankProfileSelected;
-
-    /// <summary>“应用”按钮只在空白/未保存状态下出现：具名组合是无感即时切换，无需确认。</summary>
-    public Visibility ApplyButtonVisibility => IsBlankProfileSelected
-        ? Visibility.Visible
-        : Visibility.Collapsed;
+    /// <summary>是否选中了某个具名配置组合（用于启用“删除组合”等操作）。</summary>
+    public bool HasSelectedProfile => !string.IsNullOrWhiteSpace(SelectedProfileName);
 
     public string StatusText
     {
@@ -143,23 +126,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public void ReloadProfiles(AppConfig config)
     {
         ProfileNames.Clear();
-        ProfileNames.Add(BlankProfileOption);
         foreach (var profileName in config.Profiles.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
             ProfileNames.Add(profileName);
         }
 
-        RefreshProfileSelection(config);
+        // 不再自动匹配/选择组合（去检测）；仅在当前选中项已不存在时清空选择。
+        if (!string.IsNullOrEmpty(SelectedProfileName) && !ProfileNames.Contains(SelectedProfileName))
+        {
+            SelectedProfileName = null;
+        }
     }
 
     /// <summary>
-    /// 在 MOD 的启用状态、备注或集合内容发生变化后调用：重新分桶两个门、刷新计数与配置组合匹配。
+    /// 在 MOD 的启用状态、备注或集合内容发生变化后调用：重新分桶两个门并刷新计数。
     /// </summary>
     public void NotifyModsMutated()
     {
         EnabledMods.Refresh();
         DisabledMods.Refresh();
-        RefreshProfileSelection(_config);
         OnPropertyChanged(nameof(ModCountText));
         OnPropertyChanged(nameof(EnabledModCount));
         OnPropertyChanged(nameof(DisabledModCount));
@@ -182,12 +167,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         source.Filter += (_, args) => args.Accepted = args.Item is ModItemViewModel mod && mod.IsEnabled == enabled;
         source.SortDescriptions.Add(new SortDescription(nameof(ModItemViewModel.FolderName), ListSortDirection.Ascending));
         return source;
-    }
-
-    private void RefreshProfileSelection(AppConfig config)
-    {
-        var preferred = IsBlankProfileSelected ? null : SelectedProfileName;
-        SelectedProfileName = config.FindMatchingProfileName(EnabledFolderNames, preferred) ?? BlankProfileOption;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
