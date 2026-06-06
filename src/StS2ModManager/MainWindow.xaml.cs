@@ -1,6 +1,9 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Diagnostics;
 using System.IO;
+using Microsoft.Win32;
 using StS2ModManager.Core;
 
 namespace StS2ModManager;
@@ -14,8 +17,11 @@ public partial class MainWindow : Window
     private readonly ModSynchronizer _synchronizer = new();
     private readonly ModFolderRenamer _renamer = new();
     private readonly ModProfileApplier _profileApplier = new();
+    private readonly ModImportResolver _resolver = new();
+    private readonly ModInstaller _installer = new();
     private readonly GameProcessLauncher _launcher = new();
-    private bool _isSyncing;
+    private bool _isBusy;
+    private bool _syncingSelection;
 
     public MainWindow(MainWindowViewModel viewModel, AppConfig config, AppConfigStore configStore)
     {
@@ -29,7 +35,7 @@ public partial class MainWindow : Window
 
     private async void SaveAndLaunch_Click(object sender, RoutedEventArgs e)
     {
-        if (!TrySyncMods(false))
+        if (!SyncAndReload("保存 MOD 状态失败"))
         {
             return;
         }
@@ -60,22 +66,75 @@ public partial class MainWindow : Window
         Close();
     }
 
-    private void ModToggle_Click(object sender, RoutedEventArgs e)
+    // ===== MOD 启用 / 禁用（双开门移动）=====
+
+    private void ToggleMod_Click(object sender, RoutedEventArgs e)
     {
-        TrySyncMods(true);
+        if (sender is FrameworkElement { DataContext: ModItemViewModel mod })
+        {
+            MoveMod(mod, !mod.IsEnabled);
+        }
     }
 
-    private void OpenEnabledMods_Click(object sender, RoutedEventArgs e)
+    private void ModItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        OpenDirectory(_viewModel.ModPaths.EnabledDirectory);
+        if (sender is FrameworkElement { DataContext: ModItemViewModel mod })
+        {
+            MoveMod(mod, !mod.IsEnabled);
+        }
     }
 
-    private void OpenDisabledMods_Click(object sender, RoutedEventArgs e)
+    private void MoveMod(ModItemViewModel mod, bool enable)
     {
-        OpenDirectory(_viewModel.ModPaths.DisabledDirectory);
+        if (_isBusy || mod.IsEnabled == enable)
+        {
+            return;
+        }
+
+        mod.IsEnabled = enable;
+        SyncAndReload("保存 MOD 状态失败");
     }
 
-    private void ModDetails_Click(object sender, RoutedEventArgs e)
+    // ===== 选中态：两个门共享一个“当前选中 MOD” =====
+
+    private void ModList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingSelection || sender is not ListView list)
+        {
+            return;
+        }
+
+        if (list.SelectedItem is ModItemViewModel selected)
+        {
+            _syncingSelection = true;
+            var other = ReferenceEquals(list, EnabledList) ? DisabledList : EnabledList;
+            other.SelectedItem = null;
+            _syncingSelection = false;
+            _viewModel.SelectedMod = selected;
+        }
+        else if (EnabledList.SelectedItem is null && DisabledList.SelectedItem is null)
+        {
+            _viewModel.SelectedMod = null;
+        }
+    }
+
+    private void SelectModByName(string folderName)
+    {
+        var item = _viewModel.Mods.FirstOrDefault(mod =>
+            string.Equals(mod.FolderName, folderName, StringComparison.OrdinalIgnoreCase));
+        if (item is null)
+        {
+            return;
+        }
+
+        var list = item.IsEnabled ? EnabledList : DisabledList;
+        list.SelectedItem = item;
+        list.ScrollIntoView(item);
+    }
+
+    // ===== MOD 详情 =====
+
+    private void ModName_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: ModItemViewModel mod })
         {
@@ -107,6 +166,209 @@ public partial class MainWindow : Window
         }
     }
 
+    // ===== 刷新 / 自动检测 =====
+
+    private void Refresh_Click(object sender, RoutedEventArgs e)
+    {
+        ReloadMods();
+    }
+
+    private void Window_Activated(object sender, EventArgs e)
+    {
+        if (_isBusy || !IsLoaded)
+        {
+            return;
+        }
+
+        try
+        {
+            var scanned = _scanner.Scan(_viewModel.ModPaths);
+            if (!ModSetMatches(scanned))
+            {
+                _viewModel.ReloadMods(scanned, _config);
+            }
+        }
+        catch
+        {
+            // 后台自动刷新失败时静默忽略，避免打断用户操作。
+        }
+    }
+
+    private bool ModSetMatches(IReadOnlyList<ModEntry> scanned)
+    {
+        var current = _viewModel.Mods.Select(mod => (mod.FolderName, mod.IsEnabled)).ToHashSet();
+        var incoming = scanned.Select(mod => (mod.Name, mod.IsEnabled)).ToHashSet();
+        return current.SetEquals(incoming);
+    }
+
+    // ===== 添加 mod =====
+
+    private void AddMod_Click(object sender, RoutedEventArgs e)
+    {
+        OpenMenu(sender);
+    }
+
+    private void AddFromZip_Click(object sender, RoutedEventArgs e)
+    {
+        AddMod(PickZip());
+    }
+
+    private void AddFromFolder_Click(object sender, RoutedEventArgs e)
+    {
+        AddMod(PickFolder());
+    }
+
+    private void AddMod(string? source)
+    {
+        if (_isBusy || string.IsNullOrWhiteSpace(source))
+        {
+            return;
+        }
+
+        try
+        {
+            _isBusy = true;
+            using var package = _resolver.Resolve(source);
+            var confirm = MessageBox.Show(
+                this,
+                $"检测到 MOD：{package.SuggestedName}\n{DescribePackage(package)}\n\n将添加到 mods_disabled（默认未启用）。确认添加？",
+                "添加 mod",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.OK)
+            {
+                return;
+            }
+
+            var installedName = _installer.Install(_viewModel.ModPaths, package, enabled: false);
+            ReloadMods();
+            SelectModByName(installedName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "添加 mod 失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    // ===== 更新 mod =====
+
+    private void UpdateMod_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.SelectedMod is null)
+        {
+            MessageBox.Show(this, "请先在列表中选择要更新的 MOD。", "更新 mod", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        OpenMenu(sender);
+    }
+
+    private void UpdateFromZip_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateMod(PickZip());
+    }
+
+    private void UpdateFromFolder_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateMod(PickFolder());
+    }
+
+    private void UpdateMod(string? source)
+    {
+        var target = _viewModel.SelectedMod;
+        if (_isBusy || target is null || string.IsNullOrWhiteSpace(source))
+        {
+            return;
+        }
+
+        try
+        {
+            _isBusy = true;
+            using var package = _resolver.Resolve(source);
+            var confirm = MessageBox.Show(
+                this,
+                $"将用所选内容替换 MOD：{target.FolderName}\n新内容检测为：{package.SuggestedName}\n{DescribePackage(package)}\n\n更新会保留原有的文件夹名与启用状态，确认更新？",
+                "更新 mod",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.OK)
+            {
+                return;
+            }
+
+            _installer.Update(target.SourcePath, package);
+            var folderName = target.FolderName;
+            ReloadMods();
+            SelectModByName(folderName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "更新 mod 失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    // ===== 卸载 mod =====
+
+    private void UninstallMod_Click(object sender, RoutedEventArgs e)
+    {
+        var target = _viewModel.SelectedMod;
+        if (target is null)
+        {
+            MessageBox.Show(this, "请先在列表中选择要卸载的 MOD。", "卸载 mod", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var result = MessageBox.Show(
+            this,
+            $"确认卸载（删除）MOD：{target.FolderName}？\n该操作会从磁盘删除整个 MOD 文件夹，无法恢复。",
+            "卸载 mod",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _isBusy = true;
+            _installer.Uninstall(target.SourcePath);
+            _config.RemoveMod(target.FolderName);
+            _configStore.Save(_config);
+            _viewModel.ReloadProfiles(_config);
+            ReloadMods();
+        }
+        catch (Exception ex)
+        {
+            ReloadMods();
+            MessageBox.Show(this, ex.Message, "卸载 mod 失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    // ===== 配置组合 =====
+
+    private void ProfileComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // 无感切换逻辑在后续提交中接入；当前通过“应用”按钮显式应用。
+    }
+
     private void ApplyProfile_Click(object sender, RoutedEventArgs e)
     {
         var profileName = _viewModel.SelectedProfileName;
@@ -117,6 +379,7 @@ public partial class MainWindow : Window
 
         try
         {
+            _isBusy = true;
             var mods = _scanner.Scan(_viewModel.ModPaths);
             var selections = _profileApplier.BuildExactSelections(mods, enabledFolderNames);
             _synchronizer.Sync(_viewModel.ModPaths, selections);
@@ -126,6 +389,10 @@ public partial class MainWindow : Window
         {
             ReloadMods();
             MessageBox.Show(this, ex.Message, "应用配置组合失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isBusy = false;
         }
     }
 
@@ -166,37 +433,43 @@ public partial class MainWindow : Window
         _viewModel.ReloadProfiles(_config);
     }
 
-    private bool TrySyncMods(bool preserveOrder)
+    // ===== 打开文件夹 =====
+
+    private void OpenEnabledMods_Click(object sender, RoutedEventArgs e)
     {
-        if (_isSyncing)
+        OpenDirectory(_viewModel.ModPaths.EnabledDirectory);
+    }
+
+    private void OpenDisabledMods_Click(object sender, RoutedEventArgs e)
+    {
+        OpenDirectory(_viewModel.ModPaths.DisabledDirectory);
+    }
+
+    // ===== 公共辅助 =====
+
+    private bool SyncAndReload(string errorTitle)
+    {
+        if (_isBusy)
         {
-            return true;
+            return false;
         }
 
         try
         {
-            _isSyncing = true;
+            _isBusy = true;
             _synchronizer.Sync(_viewModel.ModPaths, _viewModel.GetSelections());
-            if (preserveOrder)
-            {
-                ReloadModsPreservingOrder();
-            }
-            else
-            {
-                ReloadMods();
-            }
-
+            ReloadMods();
             return true;
         }
         catch (Exception ex)
         {
             ReloadMods();
-            MessageBox.Show(this, ex.Message, "保存 MOD 状态失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, ex.Message, errorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
         finally
         {
-            _isSyncing = false;
+            _isBusy = false;
         }
     }
 
@@ -205,9 +478,50 @@ public partial class MainWindow : Window
         _viewModel.ReloadMods(_scanner.Scan(_viewModel.ModPaths), _config);
     }
 
-    private void ReloadModsPreservingOrder()
+    private static void OpenMenu(object sender)
     {
-        _viewModel.ReloadModsPreservingOrder(_scanner.Scan(_viewModel.ModPaths), _config);
+        if (sender is Button { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        }
+    }
+
+    private string? PickZip()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择 MOD 压缩包",
+            Filter = "压缩包 (*.zip)|*.zip"
+        };
+
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    private string? PickFolder()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择 MOD 文件夹"
+        };
+
+        return dialog.ShowDialog(this) == true ? dialog.FolderName : null;
+    }
+
+    private static string DescribePackage(ResolvedModPackage package)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(package.Metadata.Author))
+        {
+            parts.Add($"作者：{package.Metadata.Author}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(package.Metadata.Version))
+        {
+            parts.Add($"版本：{package.Metadata.Version}");
+        }
+
+        return parts.Count > 0 ? string.Join("　", parts) : "（未在 manifest 中读取到 name/author 信息）";
     }
 
     private void OpenDirectory(string directory)

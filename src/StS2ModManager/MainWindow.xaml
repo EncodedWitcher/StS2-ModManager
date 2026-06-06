@@ -6,13 +6,14 @@
         mc:Ignorable="d"
         Title="StS2 Mod Manager"
         Icon="Resources/AppIcon.ico"
-        MinHeight="560"
-        MinWidth="860"
-        Height="620"
-        Width="980"
+        MinHeight="600"
+        MinWidth="1000"
+        Height="680"
+        Width="1120"
         WindowStartupLocation="CenterScreen"
         Background="#FFF8F0E5"
-        FontFamily="Bahnschrift">
+        FontFamily="Bahnschrift"
+        Activated="Window_Activated">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="MinHeight" Value="42" />
@@ -25,31 +26,157 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
+
+        <!-- 右侧功能列里的按钮：整列等宽 -->
+        <Style x:Key="FunctionButton" TargetType="Button">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Background" Value="#FFE7D9C8" />
+            <Setter Property="Foreground" Value="#FF201913" />
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- “小箭头”移动按钮 -->
+        <Style x:Key="MoveButton" TargetType="Button">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#FFC96A32" />
+            <Setter Property="Foreground" Value="#FFFFF7E8" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <Style x:Key="DoorHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#FF3C332C" />
+            <Setter Property="Margin" Value="6,0,0,8" />
+        </Style>
+
+        <!-- MOD 卡片样式：包含选中高亮与双击切换 -->
         <Style TargetType="ListViewItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Margin" Value="6,4" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Focusable" Value="False" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Background" Value="#FFF8F0E5" />
+            <EventSetter Event="MouseDoubleClick" Handler="ModItem_MouseDoubleClick" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
+                        <Border x:Name="CardBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="14"
+                                Padding="14,12"
                                 SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            <ContentPresenter HorizontalAlignment="Stretch"
                                               SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardBorder" Property="Background" Value="#FFF1E4D2" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="CardBorder" Property="Background" Value="#FFEBD7BE" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- 未启用门：右侧“启用 ▶”按钮 -->
+        <DataTemplate x:Key="DisabledModTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Style="{StaticResource TextButton}"
+                        Click="ModName_Click"
+                        VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FF201913"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Note}"
+                                   Visibility="{Binding NoteVisibility}"
+                                   Margin="0,3,0,0"
+                                   Foreground="#FF6F6258"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="⚠ 同名冲突"
+                                   Visibility="{Binding ConflictVisibility}"
+                                   Margin="0,3,0,0"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFD2522B" />
+                    </StackPanel>
+                </Button>
+
+                <Button Grid.Column="1"
+                        Style="{StaticResource MoveButton}"
+                        Margin="10,0,0,0"
+                        Content="启用 ▶"
+                        ToolTip="移动到“已启用”"
+                        Click="ToggleMod_Click" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- 已启用门：左侧“◀ 禁用”按钮 -->
+        <DataTemplate x:Key="EnabledModTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Style="{StaticResource MoveButton}"
+                        Margin="0,0,10,0"
+                        Content="◀ 禁用"
+                        ToolTip="移动到“未启用”"
+                        Click="ToggleMod_Click" />
+
+                <Button Grid.Column="1"
+                        Style="{StaticResource TextButton}"
+                        Click="ModName_Click"
+                        VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FF201913"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Note}"
+                                   Visibility="{Binding NoteVisibility}"
+                                   Margin="0,3,0,0"
+                                   Foreground="#FF6F6258"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="⚠ 同名冲突"
+                                   Visibility="{Binding ConflictVisibility}"
+                                   Margin="0,3,0,0"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFD2522B" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid Margin="24">
@@ -59,8 +186,9 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- 标题栏 -->
         <Border Grid.Row="0"
-                Padding="24"
+                Padding="24,18"
                 CornerRadius="22"
                 Background="#FF2A211B">
             <Grid>
@@ -70,7 +198,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Slay the Spire 2 MOD Manager"
                            Foreground="#FFFFF7E8"
-                           FontSize="30"
+                           FontSize="28"
                            FontWeight="Bold"
                            VerticalAlignment="Center" />
                 <Border Grid.Column="1"
@@ -86,9 +214,10 @@
             </Grid>
         </Border>
 
+        <!-- 主区域 -->
         <Border Grid.Row="1"
-                Margin="0,18"
-                Padding="8"
+                Margin="0,16"
+                Padding="12"
                 CornerRadius="18"
                 Background="#FFFFFFFF">
             <Grid>
@@ -98,15 +227,12 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0"
-                      Margin="14,12,14,8">
+                <!-- 配置组合选择条 -->
+                <Grid Grid.Row="0" Margin="6,6,6,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="220" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0"
@@ -114,103 +240,165 @@
                                VerticalAlignment="Center"
                                Foreground="#FF6F6258"
                                FontWeight="SemiBold" />
-                    <ComboBox Grid.Column="1"
+                    <ComboBox x:Name="ProfileComboBox"
+                              Grid.Column="1"
                               ItemsSource="{Binding ProfileNames}"
                               SelectedItem="{Binding SelectedProfileName, Mode=TwoWay}"
+                              SelectionChanged="ProfileComboBox_SelectionChanged"
                               Margin="12,0,0,0"
                               MinHeight="36"
                               VerticalContentAlignment="Center" />
-                    <Button Grid.Column="2"
+                    <Button x:Name="ApplyProfileButton"
+                            Grid.Column="2"
                             Content="应用"
                             Margin="12,0,0,0"
                             MinHeight="36"
                             Background="#FFE7D9C8"
                             Foreground="#FF201913"
                             Click="ApplyProfile_Click" />
-                    <Button Grid.Column="3"
-                            Content="保存当前为组合"
-                            Margin="12,0,0,0"
-                            MinHeight="36"
-                            Background="#FF3C332C"
-                            Foreground="#FFFFF7E8"
-                            Click="SaveProfile_Click" />
-                    <Button Grid.Column="4"
-                            Content="删除"
-                            Margin="12,0,0,0"
-                            MinHeight="36"
-                            Background="#FFE7D9C8"
-                            Foreground="#FF201913"
-                            Click="DeleteProfile_Click" />
                 </Grid>
 
                 <TextBlock Grid.Row="1"
                            Text="{Binding StatusText}"
                            Visibility="{Binding StatusVisibility}"
-                           Margin="14,0,14,8"
+                           Margin="6,4,6,4"
+                           FontWeight="SemiBold"
                            Foreground="#FFB9472B" />
 
-                <ListView Grid.Row="2"
-                          ItemsSource="{Binding Mods}"
-                          BorderThickness="0"
-                          Background="Transparent"
-                          HorizontalContentAlignment="Stretch"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                          ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Border HorizontalAlignment="Stretch"
-                                    Padding="14,14,20,14"
-                                    CornerRadius="14"
-                                    Background="#FFF8F0E5">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="14" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="88" />
-                                    </Grid.ColumnDefinitions>
+                <!-- 双开门 + 右侧功能列 -->
+                <Grid Grid.Row="2" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="216" />
+                    </Grid.ColumnDefinitions>
 
-                                    <CheckBox Grid.Column="0"
-                                              IsChecked="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              VerticalAlignment="Center"
-                                              Click="ModToggle_Click" />
+                    <!-- 左门：未启用 -->
+                    <Grid Grid.Column="0" Margin="0,0,8,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Style="{StaticResource DoorHeader}"
+                                   Text="{Binding DisabledHeaderText}" />
+                        <Border Grid.Row="1"
+                                CornerRadius="14"
+                                Background="#FFF3ECE0">
+                            <ListView x:Name="DisabledList"
+                                      ItemsSource="{Binding DisabledMods}"
+                                      ItemTemplate="{StaticResource DisabledModTemplate}"
+                                      SelectionChanged="ModList_SelectionChanged"
+                                      BorderThickness="0"
+                                      Background="Transparent"
+                                      HorizontalContentAlignment="Stretch"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                        </Border>
+                    </Grid>
 
-                                    <Button Grid.Column="2"
-                                            Style="{StaticResource TextButton}"
-                                            Click="ModDetails_Click">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding DisplayName}"
-                                                       FontSize="17"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#FF201913"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding Note}"
-                                                       Visibility="{Binding NoteVisibility}"
-                                                       Margin="0,4,0,0"
-                                                       Foreground="#FF6F6258"
-                                                       TextWrapping="NoWrap"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </Button>
+                    <!-- 右门：已启用 -->
+                    <Grid Grid.Column="1" Margin="8,0,8,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Style="{StaticResource DoorHeader}"
+                                   Text="{Binding EnabledHeaderText}" />
+                        <Border Grid.Row="1"
+                                CornerRadius="14"
+                                Background="#FFEFF3E8">
+                            <ListView x:Name="EnabledList"
+                                      ItemsSource="{Binding EnabledMods}"
+                                      ItemTemplate="{StaticResource EnabledModTemplate}"
+                                      SelectionChanged="ModList_SelectionChanged"
+                                      BorderThickness="0"
+                                      Background="Transparent"
+                                      HorizontalContentAlignment="Stretch"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                        </Border>
+                    </Grid>
 
-                                    <TextBlock Grid.Column="3"
-                                               Text="{Binding StateText}"
-                                               VerticalAlignment="Center"
-                                               HorizontalAlignment="Right"
-                                               FontWeight="SemiBold"
-                                               Foreground="{Binding StateBrush}" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
+                    <!-- 右侧功能列 -->
+                    <Border Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Padding="14"
+                            CornerRadius="14"
+                            Background="#FFF3ECE0">
+                        <StackPanel>
+                            <TextBlock Text="MOD 操作"
+                                       FontWeight="Bold"
+                                       Foreground="#FF6F6258"
+                                       Margin="0,0,0,8" />
+                            <Button Style="{StaticResource FunctionButton}"
+                                    Content="刷新"
+                                    ToolTip="重新扫描 mods / mods_disabled 文件夹"
+                                    Click="Refresh_Click" />
+                            <Button x:Name="AddModButton"
+                                    Style="{StaticResource FunctionButton}"
+                                    Content="添加 mod"
+                                    Click="AddMod_Click">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="从压缩包(.zip)…" Click="AddFromZip_Click" />
+                                        <MenuItem Header="从文件夹…" Click="AddFromFolder_Click" />
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                            <Button x:Name="UpdateModButton"
+                                    Style="{StaticResource FunctionButton}"
+                                    Content="更新 mod"
+                                    IsEnabled="{Binding HasSelectedMod}"
+                                    ToolTip="用所选文件夹/压缩包替换选中 MOD 的内容"
+                                    Click="UpdateMod_Click">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="从压缩包(.zip)…" Click="UpdateFromZip_Click" />
+                                        <MenuItem Header="从文件夹…" Click="UpdateFromFolder_Click" />
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                            <Button Style="{StaticResource FunctionButton}"
+                                    Content="卸载 mod"
+                                    IsEnabled="{Binding HasSelectedMod}"
+                                    ToolTip="从磁盘删除选中的 MOD"
+                                    Click="UninstallMod_Click" />
+
+                            <Border Height="1" Background="#FFD8CBBA" Margin="0,4,0,12" />
+
+                            <TextBlock Text="配置组合"
+                                       FontWeight="Bold"
+                                       Foreground="#FF6F6258"
+                                       Margin="0,0,0,8" />
+                            <Button Style="{StaticResource FunctionButton}"
+                                    Content="保存当前为组合"
+                                    Background="#FF3C332C"
+                                    Foreground="#FFFFF7E8"
+                                    Click="SaveProfile_Click" />
+                            <Button Style="{StaticResource FunctionButton}"
+                                    Content="删除组合"
+                                    IsEnabled="{Binding HasSelectedProfile}"
+                                    Click="DeleteProfile_Click" />
+
+                            <Border Height="1" Background="#FFD8CBBA" Margin="0,4,0,12" />
+
+                            <Button Style="{StaticResource FunctionButton}"
+                                    Content="打开 mods"
+                                    Click="OpenEnabledMods_Click" />
+                            <Button Style="{StaticResource FunctionButton}"
+                                    Content="打开 mods_disabled"
+                                    Click="OpenDisabledMods_Click" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
         </Border>
 
+        <!-- 底部：左下角保留“关闭 / 启动游戏” -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -218,27 +406,17 @@
 
             <Button Grid.Column="0"
                     Content="关闭"
+                    MinWidth="110"
                     Background="#FFE7D9C8"
                     Foreground="#FF201913"
                     Click="Cancel_Click" />
             <Button Grid.Column="1"
                     Content="启动游戏"
+                    MinWidth="150"
                     Margin="12,0,0,0"
                     Background="#FFC96A32"
                     Foreground="#FFFFF7E8"
                     Click="SaveAndLaunch_Click" />
-            <Button Grid.Column="2"
-                    Content="打开 mods"
-                    Margin="12,0,0,0"
-                    Background="#FFE7D9C8"
-                    Foreground="#FF201913"
-                    Click="OpenEnabledMods_Click" />
-            <Button Grid.Column="3"
-                    Content="打开 mods_disabled"
-                    Margin="12,0,0,0"
-                    Background="#FFE7D9C8"
-                    Foreground="#FF201913"
-                    Click="OpenDisabledMods_Click" />
         </Grid>
     </Grid>
 </Window>

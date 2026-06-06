@@ -57,6 +57,10 @@ public sealed class ModItemViewModel : INotifyPropertyChanged
         ? Visibility.Collapsed
         : Visibility.Visible;
 
+    public Visibility ConflictVisibility => HasConflict
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
     public string StateText
     {
         get

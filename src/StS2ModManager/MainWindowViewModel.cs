@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Data;
 using StS2ModManager.Core;
 
 namespace StS2ModManager;
@@ -9,7 +10,10 @@ namespace StS2ModManager;
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly AppConfig _config;
+    private readonly CollectionViewSource _enabledSource;
+    private readonly CollectionViewSource _disabledSource;
     private string? _selectedProfileName;
+    private ModItemViewModel? _selectedMod;
 
     public MainWindowViewModel(GameLaunchInfo launchInfo, ModPaths modPaths, IReadOnlyList<ModEntry> mods, AppConfig config)
     {
@@ -18,6 +22,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ModPaths = modPaths;
         Mods = new ObservableCollection<ModItemViewModel>();
         ProfileNames = new ObservableCollection<string>();
+
+        _enabledSource = CreateDoorView(enabled: true);
+        _disabledSource = CreateDoorView(enabled: false);
+
         ReloadMods(mods, config);
         ReloadProfiles(config);
     }
@@ -30,7 +38,29 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public ObservableCollection<ModItemViewModel> Mods { get; }
 
+    public ICollectionView EnabledMods => _enabledSource.View;
+
+    public ICollectionView DisabledMods => _disabledSource.View;
+
     public ObservableCollection<string> ProfileNames { get; }
+
+    public ModItemViewModel? SelectedMod
+    {
+        get => _selectedMod;
+        set
+        {
+            if (ReferenceEquals(_selectedMod, value))
+            {
+                return;
+            }
+
+            _selectedMod = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSelectedMod));
+        }
+    }
+
+    public bool HasSelectedMod => _selectedMod is not null;
 
     public string? SelectedProfileName
     {
@@ -51,6 +81,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string ModCountText => $"{EnabledModCount}/{Mods.Count} MODS";
 
     public int EnabledModCount => Mods.Count(mod => mod.IsEnabled);
+
+    public int DisabledModCount => Mods.Count(mod => !mod.IsEnabled);
+
+    public string EnabledHeaderText => $"已启用 · {EnabledModCount}";
+
+    public string DisabledHeaderText => $"未启用 · {DisabledModCount}";
 
     public bool HasSelectedProfile => !string.IsNullOrWhiteSpace(SelectedProfileName);
 
@@ -76,35 +112,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public void ReloadMods(IReadOnlyList<ModEntry> mods, AppConfig config)
     {
+        SelectedMod = null;
         Mods.Clear();
         foreach (var mod in mods)
         {
-            var item = new ModItemViewModel(mod, config.GetModNote(mod.Name));
-            item.PropertyChanged += ModItem_PropertyChanged;
-            Mods.Add(item);
+            Mods.Add(new ModItemViewModel(mod, config.GetModNote(mod.Name)));
         }
 
-        RefreshProfileSelection(config);
-        OnPropertyChanged(nameof(ModCountText));
-        OnPropertyChanged(nameof(EnabledModCount));
-        OnPropertyChanged(nameof(StatusText));
-        OnPropertyChanged(nameof(StatusVisibility));
-    }
-
-    public void ReloadModsPreservingOrder(IReadOnlyList<ModEntry> mods, AppConfig config)
-    {
-        var previousIndexes = Mods
-            .Select((mod, index) => new { mod.FolderName, Index = index })
-            .ToDictionary(mod => mod.FolderName, mod => mod.Index, StringComparer.OrdinalIgnoreCase);
-
-        var orderedMods = mods
-            .Select((mod, scanIndex) => new { Mod = mod, ScanIndex = scanIndex })
-            .OrderBy(item => previousIndexes.TryGetValue(item.Mod.Name, out var index) ? index : int.MaxValue)
-            .ThenBy(item => item.ScanIndex)
-            .Select(item => item.Mod)
-            .ToArray();
-
-        ReloadMods(orderedMods, config);
+        NotifyModsMutated();
     }
 
     public void ReloadProfiles(AppConfig config)
@@ -118,6 +133,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshProfileSelection(config);
     }
 
+    /// <summary>
+    /// 在 MOD 的启用状态、备注或集合内容发生变化后调用：重新分桶两个门、刷新计数与配置组合匹配。
+    /// </summary>
+    public void NotifyModsMutated()
+    {
+        EnabledMods.Refresh();
+        DisabledMods.Refresh();
+        RefreshProfileSelection(_config);
+        OnPropertyChanged(nameof(ModCountText));
+        OnPropertyChanged(nameof(EnabledModCount));
+        OnPropertyChanged(nameof(DisabledModCount));
+        OnPropertyChanged(nameof(EnabledHeaderText));
+        OnPropertyChanged(nameof(DisabledHeaderText));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StatusVisibility));
+    }
+
     public IReadOnlyList<ModSelection> GetSelections()
     {
         return Mods
@@ -125,16 +157,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             .ToArray();
     }
 
-    private void ModItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private CollectionViewSource CreateDoorView(bool enabled)
     {
-        if (!string.Equals(e.PropertyName, nameof(ModItemViewModel.IsEnabled), StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        OnPropertyChanged(nameof(EnabledModCount));
-        OnPropertyChanged(nameof(ModCountText));
-        RefreshProfileSelection(_config);
+        var source = new CollectionViewSource { Source = Mods };
+        source.Filter += (_, args) => args.Accepted = args.Item is ModItemViewModel mod && mod.IsEnabled == enabled;
+        source.SortDescriptions.Add(new SortDescription(nameof(ModItemViewModel.FolderName), ListSortDirection.Ascending));
+        return source;
     }
 
     private void RefreshProfileSelection(AppConfig config)
