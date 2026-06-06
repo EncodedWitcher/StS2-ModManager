@@ -94,6 +94,27 @@ public sealed class AppConfig
         ModNotes[key] = normalizedNote;
     }
 
+    public void RemoveMod(string folderName)
+    {
+        if (string.IsNullOrWhiteSpace(folderName))
+        {
+            return;
+        }
+
+        var noteKey = FindKey(ModNotes, folderName);
+        if (noteKey is not null)
+        {
+            ModNotes.Remove(noteKey);
+        }
+
+        foreach (var profileName in Profiles.Keys.ToArray())
+        {
+            Profiles[profileName] = Profiles[profileName]
+                .Where(name => !string.Equals(name, folderName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
+    }
+
     public void RenameModKey(string oldFolderName, string newFolderName)
     {
         if (string.Equals(oldFolderName, newFolderName, StringComparison.OrdinalIgnoreCase))
