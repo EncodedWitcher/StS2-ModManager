@@ -47,7 +47,36 @@
             </Style.Triggers>
         </Style>
 
-        <!-- “小箭头”移动按钮 -->
+        <!-- 圆形“详情”按钮：淡蓝色感叹号，位于卡片最左 -->
+        <Style x:Key="InfoButton" TargetType="Button">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Content" Value="!" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+            <Setter Property="Background" Value="#FF6FB1E6" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="11" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF5A9FD8" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- “小箭头”移动按钮：内容随启用状态切换 -->
         <Style x:Key="MoveButton" TargetType="Button">
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Padding" Value="10,6" />
@@ -55,6 +84,14 @@
             <Setter Property="Background" Value="#FFC96A32" />
             <Setter Property="Foreground" Value="#FFFFF7E8" />
             <Setter Property="FontSize" Value="13" />
+            <Setter Property="Content" Value="启用 ▶" />
+            <Setter Property="ToolTip" Value="移动到“已启用”（也可双击卡片）" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                    <Setter Property="Content" Value="◀ 禁用" />
+                    <Setter Property="ToolTip" Value="移动到“未启用”（也可双击卡片）" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="DoorHeader" TargetType="TextBlock">
@@ -77,6 +114,8 @@
                     <ControlTemplate TargetType="ListViewItem">
                         <Border x:Name="CardBorder"
                                 Background="{TemplateBinding Background}"
+                                BorderBrush="#FFDDD0BE"
+                                BorderThickness="1"
                                 CornerRadius="14"
                                 Padding="14,12"
                                 SnapsToDevicePixels="True">
@@ -89,6 +128,7 @@
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="CardBorder" Property="Background" Value="#FFEBD7BE" />
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="#FFC96A32" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -96,85 +136,44 @@
             </Setter>
         </Style>
 
-        <!-- 未启用门：右侧“启用 ▶”按钮 -->
-        <DataTemplate x:Key="DisabledModTemplate">
+        <!-- MOD 卡片：左侧圆形详情按钮 + 名称 + 右侧移动按钮（两扇门共用）-->
+        <DataTemplate x:Key="ModCardTemplate">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0"
-                        Style="{StaticResource TextButton}"
-                        Click="ModName_Click"
-                        VerticalAlignment="Center">
-                    <StackPanel>
-                        <TextBlock Text="{Binding DisplayName}"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FF201913"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Note}"
-                                   Visibility="{Binding NoteVisibility}"
-                                   Margin="0,3,0,0"
-                                   Foreground="#FF6F6258"
-                                   TextWrapping="NoWrap"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="⚠ 同名冲突"
-                                   Visibility="{Binding ConflictVisibility}"
-                                   Margin="0,3,0,0"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFD2522B" />
-                    </StackPanel>
-                </Button>
+                        Style="{StaticResource InfoButton}"
+                        ToolTip="查看详情 / 改名 / 备注"
+                        Click="ModInfo_Click" />
 
-                <Button Grid.Column="1"
+                <StackPanel Grid.Column="1"
+                            Margin="12,0,10,0"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="#FF201913"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Note}"
+                               Visibility="{Binding NoteVisibility}"
+                               Margin="0,3,0,0"
+                               Foreground="#FF6F6258"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="⚠ 同名冲突"
+                               Visibility="{Binding ConflictVisibility}"
+                               Margin="0,3,0,0"
+                               FontWeight="SemiBold"
+                               Foreground="#FFD2522B" />
+                </StackPanel>
+
+                <Button Grid.Column="2"
                         Style="{StaticResource MoveButton}"
-                        Margin="10,0,0,0"
-                        Content="启用 ▶"
-                        ToolTip="移动到“已启用”"
                         Click="ToggleMod_Click" />
-            </Grid>
-        </DataTemplate>
-
-        <!-- 已启用门：左侧“◀ 禁用”按钮 -->
-        <DataTemplate x:Key="EnabledModTemplate">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <Button Grid.Column="0"
-                        Style="{StaticResource MoveButton}"
-                        Margin="0,0,10,0"
-                        Content="◀ 禁用"
-                        ToolTip="移动到“未启用”"
-                        Click="ToggleMod_Click" />
-
-                <Button Grid.Column="1"
-                        Style="{StaticResource TextButton}"
-                        Click="ModName_Click"
-                        VerticalAlignment="Center">
-                    <StackPanel>
-                        <TextBlock Text="{Binding DisplayName}"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FF201913"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Note}"
-                                   Visibility="{Binding NoteVisibility}"
-                                   Margin="0,3,0,0"
-                                   Foreground="#FF6F6258"
-                                   TextWrapping="NoWrap"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="⚠ 同名冲突"
-                                   Visibility="{Binding ConflictVisibility}"
-                                   Margin="0,3,0,0"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFD2522B" />
-                    </StackPanel>
-                </Button>
             </Grid>
         </DataTemplate>
     </Window.Resources>
@@ -283,13 +282,14 @@
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0"
                                    Style="{StaticResource DoorHeader}"
+                                   Foreground="#FFC0552F"
                                    Text="{Binding DisabledHeaderText}" />
                         <Border Grid.Row="1"
                                 CornerRadius="14"
                                 Background="#FFF3ECE0">
                             <ListView x:Name="DisabledList"
                                       ItemsSource="{Binding DisabledMods}"
-                                      ItemTemplate="{StaticResource DisabledModTemplate}"
+                                      ItemTemplate="{StaticResource ModCardTemplate}"
                                       SelectionChanged="ModList_SelectionChanged"
                                       BorderThickness="0"
                                       Background="Transparent"
@@ -307,13 +307,14 @@
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0"
                                    Style="{StaticResource DoorHeader}"
+                                   Foreground="#FF3F7D4F"
                                    Text="{Binding EnabledHeaderText}" />
                         <Border Grid.Row="1"
                                 CornerRadius="14"
                                 Background="#FFEFF3E8">
                             <ListView x:Name="EnabledList"
                                       ItemsSource="{Binding EnabledMods}"
-                                      ItemTemplate="{StaticResource EnabledModTemplate}"
+                                      ItemTemplate="{StaticResource ModCardTemplate}"
                                       SelectionChanged="ModList_SelectionChanged"
                                       BorderThickness="0"
                                       Background="Transparent"

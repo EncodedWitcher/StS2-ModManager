@@ -134,7 +134,7 @@ public partial class MainWindow : Window
 
     // ===== MOD 详情 =====
 
-    private void ModName_Click(object sender, RoutedEventArgs e)
+    private void ModInfo_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: ModItemViewModel mod })
         {
